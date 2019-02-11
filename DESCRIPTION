@@ -8,8 +8,14 @@ Description: Service functions for construction of event history data from histo
 Imports:
     dplyr,
     lubridate,
-    stringr
-License: MIT
+    stringr,
+    furrr,
+    data.table,
+    future,
+    purrr,
+    tibble,
+    zoo
+License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 6.1.0
+RoxygenNote: 6.1.1

@@ -71,3 +71,50 @@ construct_date <- function(x, month = 701, day = 15){
   )
   make_date_logical(y)
 }
+
+
+fill_var <- function(d, var, up, idvar){
+  list_df <- d[, list(y=list(get(var))), by=idvar]
+  unlist(furrr::future_map(list_df$y, ~zoo::na.locf(., na.rm=F, fromLast = up)))
+}
+
+
+
+#' Multicore fill missing values by group
+#'
+#' Fast fill in missing values by group. Splits data.frame into groups
+#' and fills missing values using zoo::na.locf.
+#'
+#' @param d data.frame
+#' @param var_names vector of variable names
+#' @param idvar character with name of grouping variable
+#' @param up boolean direction of fill
+#'
+#' @import future
+#' @import data.table
+#' @importFrom furrr future_map
+#' @importFrom zoo na.locf
+#' @importFrom purrr map
+#' @importFrom tibble as_tibble
+#' @importFrom dplyr bind_cols
+#'
+#' @examples
+#' df <- data.frame(Month = 1:12, Year = c(2000, rep(NA, 11)), theid = rep(1:2, each = 12))
+#' fill_split(df, "Year", "theid")
+#'
+#' @export
+
+fill_split <- function(d, var_names, idvar, up = FALSE){
+  future::plan(future::multicore, workers = (future::availableCores() - 1))
+  options(future.globals.maxSize = 9e9)
+
+  # for each var split x and run zoo::na.locf
+  dt <- data.table::as.data.table(d)
+  vars <- purrr::map(var_names, ~fill_var(dt, ., up, idvar))
+
+
+  bind_cols(
+    d[ ,colnames(d)[!colnames(d) %in% var_names] ],
+    as_tibble(as.data.frame(vars, col.names = var_names))
+  )
+}
