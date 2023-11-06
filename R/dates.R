@@ -75,8 +75,15 @@ construct_date <- function(x, month = 701, day = 15){
 
 fill_var <- function(d, var, up, idvar){
   list_df <- d[, list(y=list(get(var))), by=idvar]
+  unlist(parallel::mclapply(list_df$y, zoo::na.locf, na.rm=F, fromLast = up, mc.cores = 11) )
+}
+
+
+fill_var_win <- function(d, var, up, idvar){
+  list_df <- d[, list(y=list(get(var))), by=idvar]
   unlist(furrr::future_map(list_df$y, ~zoo::na.locf(., na.rm=F, fromLast = up)))
 }
+
 
 
 
@@ -105,12 +112,26 @@ fill_var <- function(d, var, up, idvar){
 #' @export
 
 fill_split <- function(d, var_names, idvar, up = FALSE){
-  future::plan(future::multicore, workers = (future::availableCores() - 1))
-  options(future.globals.maxSize = 9e9)
+  os_type <- .Platform$OS.type
+  sys_info <- Sys.info()["sysname"]
 
-  # for each var split x and run zoo::na.locf
-  dt <- data.table::as.data.table(d)
-  vars <- purrr::map(var_names, ~fill_var(dt, ., up, idvar))
+  # Depending on the OS, use a different parallelization approach
+  if (os_type == "windows" || sys_info == "Windows") {
+    # Load the furrr package
+    future::plan(future::multicore, workers = (future::availableCores() - 1))
+    options(future.globals.maxSize = 9e9)
+
+
+    dt <- data.table::as.data.table(d)
+    vars <- purrr::map(var_names, ~fill_var_win(dt, ., up, idvar))
+  } else if (os_type == "unix"){
+    # Load the parallel package
+
+    dt <- data.table::as.data.table(d)
+    vars <- purrr::map(var_names, ~fill_var(dt, ., up, idvar))
+  } else {
+    stop("OS not supported for parallel execution.")
+  }
 
 
   bind_cols(
@@ -118,3 +139,5 @@ fill_split <- function(d, var_names, idvar, up = FALSE){
     as_tibble(as.data.frame(vars, col.names = var_names))
   )
 }
+
+
